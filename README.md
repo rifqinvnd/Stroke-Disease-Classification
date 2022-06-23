@@ -26,7 +26,8 @@ Making Machine Learning with the KNearestNeighbors Algorithm that can classify s
 The dataset used to predict stroke is a dataset from Kaggle. This dataset has been used to predict stroke with 566 different model algorithms. This dataset has:
 - 5110 samples or rows
 - 11 features or columns 
-- 1 target column (stroke). 
+- 1 target column (stroke).
+
 This dataset was created by [fedesoriano](https://www.kaggle.com/fedesoriano) and it was last updated 9 months ago.
 
 Dataset: [Stroke Prediction Dataset](https://www.kaggle.com/fedesoriano/stroke-prediction-dataset)
@@ -50,27 +51,76 @@ stroke : Prediction target if the patient has a stroke then 1, otherwise 0 [int]
 In the project, it can be seen from the number of targets, the number of patients who had a stroke was very small compared to patients who did not have a stroke. And with the heatmap it can be seen that gender does not affect a person can have a stroke or not.
 
 ## Data Preparation
-For the data preparation stage, several steps have been carried out, namely by overcoming empty data with an average value (*mean substitution*), eliminating unnecessary columns such as the 'id' column, removing outliers in the data with IQR, dividing the dataset into train and test data, and standardize with StandardScaler.
+For the data preparation stage, several steps have been carried out, namely by overcoming empty data with an average value (*mean substitution*):
+
+`df['bmi'].fillna(df['bmi'].mean(), inplace=True)`
+
+eliminating unnecessary columns such as the 'id' column:
+
+`df = df.drop(['id'], axis=1)`
+
+removing outliers in the data beyond IQR:
+
+`Q1 = df[outlier].quantile(0.25)
+Q3 = df[outlier].quantile(0.75)
+IQR = Q3 - Q1
+df = df[~((df[outlier]<(Q1-1.5*IQR))|(df[outlier]>(Q3+1.5*IQR))).any(axis=1)]
+df.reset_index(drop=True)`
+
+convert categorical column to numerical:
+
+`df = pd.get_dummies(df)`
+
+using SMOTE Technique to creates as many synthetic examples for minority class as are requirred so that finally two target class are well represented. It does so by synthesising samples that are close to the feature space ,for the minority target class:
+
+`sm = SMOTE(random_state=111)
+X_sm , y_sm = sm.fit_resample(X,y)`
+
+dividing the dataset into train and test data:
+
+`X_train, X_test, y_train, y_test = train_test_split(
+    X_sm,
+    y_sm,
+    test_size= .2)`
+
+and standardize X with StandardScaler:
+
+`X_train = StandardScaler().fit_transform(X_train)
+X_test = StandardScaler().fit_transform(X_test)`
 
 Steps are needed such as filling in empty data with the mean so that the data does not need to be discarded because the mean and median values are almost the same. For the stage of removing outliers and the 'id' column is needed so that data that can damage the model can be removed. After that, it is necessary to divide the dataset into train and test data in order to evaluate the performance of the model with test data that has not been recognized by the model. The standardization stage is carried out so that the features are not slamming in value with other features.
 
 ## Modeling
-Seperti yang sudah dijelaskan diawal, pemodelan machine learning untuk memprediksi stroke pada pasien yaitu menggunakan algoritma K-Nearest Neighbors Classifier. Algoritma ini bekerja berdasarkan dengan fitur fitur yang ada dan kemiripan antara fitur fitur tersebut untuk mengklasifikasikan target.
+Machine learning modeling to predict stroke in patients uses the K-Nearest Neighbors Classifier algorithm. This algorithm works based on existing features and similarities between these features to classify targets.
 
-Dengan data yang ada dan setelah dilakukan pengolahan data, diambil fitur fitur yang berpengaruh tinggi terhadap kemungkinan seseorang terkena stroke. Beberapa fitur yang digunakan yaitu seperti usia, hipertensi, penyakit jantung, pekerjaan, dan status merokok.
+`baseline_model = KNeighborsClassifier()`
 
-Pada awal pembuatan model, digunakan model K-NearestNeighborsClassifier dengan parameter default dan saat ditunjukkan hasil dari klasifikasinya meraih akurasi sebesar 96% dimana telah mencapai target dari akurasi model.
+At the beginning of making the model, the K-NearestNeighborsClassifier model is used with default parameters and when the results are shown the classification achieves an accuracy of 97.5% which has reached the target of model accuracy.
 
-Tetapi dilakukan pengembangan machine learning menggunakan HalvingGridSearchCV dengan beberapa parameter n_neighbors, p, weights, dan algorithm. Setelah dilakukan hyperparameter tuning dengan parameter tersebut dan dengan scoring category yaitu recall, ditemukan algoritma dengan score recall terbaik yaitu saat menggunakan algorithm='brute', leaf_size=18, n_neighbors=1, p=1, weights='distance'. Meskipun didapatkan akurasi model sebesar 94%, namun target awal merupakan prediksi dari seseorang dengan penyakit stroke dimana nilai recall naik sebesar 0.17.
+`param_grid = {'n_neighbors': [1, 2],
+              'p': [1, 2],
+              'weights': ["uniform","distance"],
+              'algorithm':["ball_tree", "kd_tree", "brute"],
+              }`
+
+`new_param = HalvingGridSearchCV(baseline_model, 
+                                param_grid, 
+                                cv=StratifiedKFold(n_splits=3, random_state= 123, shuffle=True),
+                                resource='leaf_size',
+                                max_resources=20,
+                                scoring='recall',
+                                aggressive_elimination=False).fit(X_train, y_train)`
+
+However, machine learning was developed using HalvingGridSearchCV with several parameters n_neighbors, p, weights, and algorithm. After hyperparameter tuning with these parameters and the scoring category, namely recall, was found the algorithm with the best recall score was found when using algorithm='ball_tree', leaf_size=18, n_neighbors=1, p=1, weights='distance'. Although the model accuracy is drop to 96%, the initial target is a prediction from someone with stroke where the recall value increases from 97.1% to 97.7%. This model can predict the patient with the chance of stroke much better.
+
+`model = KNeighborsClassifier(algorithm='ball_tree', leaf_size=18, n_neighbors=1, p=1, weights='distance')`
 
 ## Evaluasi Model
-Dilakukan perbandingan metrics antara model baseline awal dengan model yang hyperparameternya telah dituning dengan beberapa jenis evaluasi seperti accracy, f1-score, precision, dan recall. Setelah model dilakukan hyperparameter tuning, akurasi dari model berkurang sebesar 2% dari 96% menjadi 94%, hal ini dikarenakan target yang ingin dituning merupakan recall score.
+Comparison of metrics between the initial baseline model and the model whose hyperparameters have been tuned with several types of evaluations such as accracy, f1-score, precision, and recall. After hyperparameter tuning of the model, the accuracy of the model decreased by 1% from 97% to 96%, this is because the target to be tuned is the recall score. This is because the model is required to classify patients with possible scores so as to reduce false negatives as much as possible.
 
-Hal ini karena model diharusikan untuk mengklasifikasikan pasien dengan kemungkinan score sehingga sebisa mungkin mengurangi false negative.
-
-Maka dari itu disajikan model dengan parameter terbaik setelah dituning dengan kenaikan recall score sebesar 17% dibandingkan dengan model baseline awal. Model ini belum dapat digunakan untuk memprediksi data sesungguhnya karena precision score dari prediksi penyakit sangat rendah karena jumlah target dataset yang sangat yang berjauhan dimana jumlah pasien non stroke sangat banyak dibandingkan dengan pasien yang terkena stroke. Karena hal ini dibutuhkan algoritma lain selain dari KNearestNeighborsClassifier untuk data stroke ini seperti LogisticRegression, RandomForest, dll.
+Therefore, a model with the best parameters is presented after being tuned with an increase in recall score of 17% compared to the initial baseline model. This model cannot be used to predict the actual data because the precision score of the disease prediction is very low because the number of target datasets is very far apart where the number of non-stroke patients is very large compared to patients who have stroke. Because of this, other algorithms other than KNearestNeighborsClassifier are needed for this stroke data such as LogisticRegression, RandomForest, etc.
 
 ### Referensi
-- Dokumentasi Scikit-learn: [https://scikit-learn.org/stable/modules/classes.html](https://scikit-learn.org/stable/modules/classes.html)
-- Referensi Laporan: [https://github.com/fahmij8/ML-Exercise/blob/main/MLT-1/MLT_Proyek_Submission_1.ipynb](https://github.com/fahmij8/ML-Exercise/blob/main/MLT-1/MLT_Proyek_Submission_1.ipynb)
-- Projek: [https://www.kaggle.com/muhamilham/supervised-learning-stroke-prediction](https://www.kaggle.com/muhamilham/supervised-learning-stroke-prediction)
+- Scikit-learn Docummentation: [https://scikit-learn.org/stable/modules/classes.html](https://scikit-learn.org/stable/modules/classes.html)
+- Report Reference: [https://github.com/fahmij8/ML-Exercise/blob/main/MLT-1/MLT_Proyek_Submission_1.ipynb](https://github.com/fahmij8/ML-Exercise/blob/main/MLT-1/MLT_Proyek_Submission_1.ipynb)
+- Project: [https://www.kaggle.com/muhamilham/supervised-learning-stroke-prediction](https://www.kaggle.com/muhamilham/supervised-learning-stroke-prediction)
